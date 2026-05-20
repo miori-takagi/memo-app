@@ -1,0 +1,1124 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>📅 タイムスタンプ・カレンダーメモ</title>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+
+    <!-- ========================================================
+         ★ STEP 1: ここにGoogle CloudのクライアントIDを貼り付けてください
+         例: 123456789-abcdefg.apps.googleusercontent.com
+    ======================================================== -->
+    <meta name="google-client-id" content="1027943273850-qute0ds41hisbaoe9updqskn8ps2pegq.apps.googleusercontent.com">
+
+    <style>
+        :root {
+            --bg: #0f1117;
+            --surface: #1a1d27;
+            --surface2: #22263a;
+            --border: #2e3347;
+            --text: #e8eaf0;
+            --text-muted: #7a7f99;
+            --accent: #5b8dee;
+            --accent-hover: #4a7be0;
+            --accent-soft: rgba(91,141,238,0.12);
+            --danger: #e05b6e;
+            --success: #4ecb8d;
+            --warn: #f0a94e;
+            --radius: 8px;
+            --font-body: 'Noto Sans JP', sans-serif;
+            --font-mono: 'JetBrains Mono', monospace;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: var(--font-body);
+            background: var(--bg);
+            color: var(--text);
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        /* ── ヘッダー ── */
+        header {
+            background: var(--surface);
+            border-bottom: 1px solid var(--border);
+            padding: 0 20px;
+            height: 54px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-shrink: 0;
+            gap: 12px;
+        }
+
+        .header-left {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 1rem;
+            font-weight: 700;
+            letter-spacing: 0.02em;
+            color: var(--text);
+        }
+
+        .header-left span { color: var(--accent); }
+
+        /* Google認証ボタン */
+        #auth-section { display: flex; align-items: center; gap: 10px; }
+
+        #sign-in-btn {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: white;
+            color: #333;
+            border: none;
+            border-radius: var(--radius);
+            padding: 7px 14px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: opacity 0.2s;
+        }
+        #sign-in-btn:hover { opacity: 0.9; }
+        #sign-in-btn svg { width: 18px; height: 18px; }
+
+        #user-info {
+            display: none;
+            align-items: center;
+            gap: 10px;
+        }
+
+        #user-avatar {
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            border: 2px solid var(--accent);
+        }
+
+        #user-name {
+            font-size: 0.85rem;
+            color: var(--text-muted);
+            font-weight: 500;
+        }
+
+        #sign-out-btn {
+            background: none;
+            border: 1px solid var(--border);
+            color: var(--text-muted);
+            border-radius: var(--radius);
+            padding: 5px 10px;
+            font-size: 0.78rem;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        #sign-out-btn:hover { border-color: var(--danger); color: var(--danger); }
+
+        /* 同期ステータス */
+        #sync-status {
+            font-size: 0.78rem;
+            font-family: var(--font-mono);
+            padding: 4px 10px;
+            border-radius: 20px;
+            background: var(--surface2);
+            border: 1px solid var(--border);
+            color: var(--text-muted);
+            display: none;
+            gap: 5px;
+            align-items: center;
+        }
+        #sync-status.show { display: flex; }
+        #sync-status.syncing { color: var(--accent); border-color: var(--accent); }
+        #sync-status.synced  { color: var(--success); border-color: var(--success); }
+        #sync-status.error   { color: var(--danger);  border-color: var(--danger); }
+
+        /* ── ログイン前オーバーレイ ── */
+        #login-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(15,17,23,0.92);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 24px;
+            z-index: 100;
+            backdrop-filter: blur(4px);
+        }
+        #login-overlay h2 { font-size: 1.5rem; font-weight: 700; }
+        #login-overlay p  { color: var(--text-muted); font-size: 0.9rem; text-align: center; line-height: 1.8; }
+        #login-overlay-btn {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            background: white;
+            color: #333;
+            border: none;
+            border-radius: var(--radius);
+            padding: 12px 24px;
+            font-size: 1rem;
+            font-weight: 700;
+            cursor: pointer;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+            transition: transform 0.15s;
+        }
+        #login-overlay-btn:hover { transform: translateY(-1px); }
+        #login-overlay-btn svg { width: 22px; height: 22px; }
+
+        /* ── メインレイアウト ── */
+        .container {
+            display: flex;
+            flex: 1;
+            overflow: hidden;
+        }
+
+        /* ── サイドバー ── */
+        .sidebar {
+            width: 340px;
+            background: var(--surface);
+            border-right: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            gap: 0;
+            flex-shrink: 0;
+            transition: width 0.3s ease, padding 0.3s ease;
+            overflow: hidden;
+        }
+
+        .sidebar-inner {
+            padding: 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+            height: 100%;
+            overflow: hidden;
+        }
+
+        .section-label {
+            font-size: 0.72rem;
+            font-weight: 700;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            color: var(--text-muted);
+            margin-bottom: 8px;
+        }
+
+        /* カレンダー */
+        .calendar-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 6px;
+            margin-bottom: 10px;
+        }
+
+        .cal-nav-btn {
+            background: var(--surface2);
+            border: 1px solid var(--border);
+            color: var(--text);
+            border-radius: var(--radius);
+            width: 30px;
+            height: 30px;
+            font-size: 0.85rem;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: background 0.2s;
+            flex-shrink: 0;
+        }
+        .cal-nav-btn:hover { background: var(--accent-soft); border-color: var(--accent); }
+
+        .calendar-jump-input {
+            flex: 1;
+            padding: 5px 8px;
+            background: var(--surface2);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            color: var(--text);
+            font-size: 0.82rem;
+            font-family: var(--font-mono);
+            text-align: center;
+        }
+        .calendar-jump-input:focus { outline: none; border-color: var(--accent); }
+
+        .calendar-grid {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            gap: 3px;
+            text-align: center;
+        }
+
+        .day-header {
+            font-size: 0.72rem;
+            font-weight: 700;
+            color: var(--text-muted);
+            padding: 4px 0;
+        }
+
+        .day-cell {
+            padding: 6px 0;
+            font-size: 0.82rem;
+            border-radius: 6px;
+            cursor: pointer;
+            border: 1px solid transparent;
+            transition: background 0.15s;
+            user-select: none;
+            font-family: var(--font-mono);
+        }
+        .day-cell:hover:not(.empty) { background: var(--surface2); }
+        .day-cell.active { background: var(--accent) !important; color: white !important; font-weight: 700; }
+        .day-cell.empty  { cursor: default; }
+        .day-cell.today-marker { border-color: var(--accent); color: var(--accent); font-weight: 700; }
+        .day-cell.has-memo::after { content: '·'; display: block; color: var(--accent); font-size: 1rem; line-height: 0; margin-top: 2px; }
+        .day-cell.active::after { color: white; }
+
+        /* 日曜・土曜色 */
+        .day-header:nth-child(1)      { color: var(--danger); }
+        .day-header:nth-child(7)      { color: var(--accent); }
+        .day-cell:nth-child(7n+1):not(.active) { color: #e05b6e99; }
+        .day-cell:nth-child(7n):not(.active)   { color: #5b8dee99; }
+
+        /* 検索 */
+        .search-wrapper { position: relative; }
+        .search-input {
+            width: 100%;
+            padding: 8px 32px 8px 10px;
+            background: var(--surface2);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            color: var(--text);
+            font-size: 0.85rem;
+        }
+        .search-input::placeholder { color: var(--text-muted); }
+        .search-input:focus { outline: none; border-color: var(--accent); }
+
+        .search-clear-btn {
+            position: absolute;
+            right: 8px;
+            top: 50%;
+            transform: translateY(-50%);
+            background: none;
+            border: none;
+            cursor: pointer;
+            color: var(--text-muted);
+            font-size: 0.85rem;
+            display: none;
+        }
+        .search-clear-btn.visible { display: block; }
+
+        .search-match-count {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            margin-top: 4px;
+            font-family: var(--font-mono);
+            min-height: 1.2em;
+        }
+
+        /* 履歴 */
+        .history-container {
+            flex: 1;
+            overflow-y: auto;
+            overflow-x: hidden;
+        }
+        .history-container::-webkit-scrollbar { width: 4px; }
+        .history-container::-webkit-scrollbar-track { background: transparent; }
+        .history-container::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+        .history-list { list-style: none; display: flex; flex-direction: column; gap: 4px; margin-top: 8px; }
+
+        .history-item {
+            padding: 9px 10px;
+            background: var(--surface2);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            cursor: pointer;
+            font-size: 0.8rem;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            transition: border-color 0.15s, background 0.15s;
+        }
+        .history-item:hover { border-color: var(--accent); background: var(--accent-soft); }
+        .history-item.active-item { border-color: var(--accent); background: var(--accent-soft); }
+
+        .history-text {
+            flex: 1;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            color: var(--text);
+        }
+        .history-snippet {
+            font-size: 0.72rem;
+            color: var(--text-muted);
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            margin-top: 2px;
+        }
+
+        .delete-btn {
+            background: none;
+            border: none;
+            color: var(--text-muted);
+            cursor: pointer;
+            font-size: 0.85rem;
+            padding: 2px 4px;
+            border-radius: 4px;
+            flex-shrink: 0;
+            transition: color 0.15s;
+        }
+        .delete-btn:hover { color: var(--danger); }
+
+        mark.search-highlight {
+            background: rgba(240,169,78,0.35);
+            color: var(--warn);
+            border-radius: 2px;
+            padding: 0 1px;
+        }
+
+        /* ── メインコンテンツ ── */
+        .main-content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 0;
+            overflow: hidden;
+            background: var(--bg);
+        }
+
+        .main-toolbar {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 16px;
+            border-bottom: 1px solid var(--border);
+            background: var(--surface);
+            flex-shrink: 0;
+            flex-wrap: wrap;
+        }
+
+        .file-badge {
+            flex: 1;
+            background: var(--surface2);
+            border: 1px solid var(--border);
+            border-left: 3px solid var(--accent);
+            border-radius: var(--radius);
+            padding: 6px 12px;
+            font-size: 0.8rem;
+            font-family: var(--font-mono);
+            color: var(--text-muted);
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            min-width: 0;
+        }
+
+        .toolbar-btn {
+            background: var(--surface2);
+            border: 1px solid var(--border);
+            color: var(--text);
+            border-radius: var(--radius);
+            padding: 6px 12px;
+            font-size: 0.8rem;
+            cursor: pointer;
+            white-space: nowrap;
+            transition: all 0.15s;
+            font-family: var(--font-body);
+            flex-shrink: 0;
+        }
+        .toolbar-btn:hover:not(:disabled) { background: var(--accent-soft); border-color: var(--accent); }
+        .toolbar-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+        .toolbar-btn.primary { background: var(--accent); border-color: var(--accent); color: white; }
+        .toolbar-btn.primary:hover { background: var(--accent-hover); }
+        .toolbar-btn.danger { border-color: var(--danger); color: var(--danger); }
+        .toolbar-btn.danger:hover { background: rgba(224,91,110,0.1); }
+
+        textarea {
+            flex: 1;
+            width: 100%;
+            padding: 20px;
+            background: var(--bg);
+            color: var(--text);
+            border: none;
+            resize: none;
+            font-size: 0.95rem;
+            line-height: 1.8;
+            font-family: var(--font-body);
+        }
+        textarea:focus { outline: none; }
+        textarea::placeholder { color: var(--text-muted); }
+
+        /* ── フルスクリーン ── */
+        .container.fullscreen .sidebar { width: 0; }
+        .container.fullscreen .sidebar .sidebar-inner { display: none; }
+
+        /* ── スマホ対応 ── */
+        @media (max-width: 768px) {
+            .container { flex-direction: column; }
+            .sidebar {
+                width: 100% !important;
+                height: 360px;
+                border-right: none;
+                border-bottom: 1px solid var(--border);
+            }
+            .container.fullscreen .sidebar { height: 0; }
+            .container.fullscreen .sidebar .sidebar-inner { display: none; }
+        }
+
+        /* ローディング */
+        .loading-spinner {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border: 2px solid currentColor;
+            border-top-color: transparent;
+            border-radius: 50%;
+            animation: spin 0.6s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* フェードイン */
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+        .fade-in { animation: fadeIn 0.2s ease; }
+    </style>
+</head>
+<body>
+
+<!-- ログイン前オーバーレイ -->
+<div id="login-overlay">
+    <div style="font-size:2.5rem;">📅</div>
+    <h2>デイリータイムスタンプ メモ</h2>
+    <p>Googleアカウントでログインすると<br>PCとスマホでメモを同期できます</p>
+    <button id="login-overlay-btn" onclick="handleSignIn()">
+        <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+            <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
+            <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+            <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/>
+            <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
+        </svg>
+        Googleでサインイン
+    </button>
+    <p style="font-size:0.78rem; color: var(--text-muted);">
+        ※ メモはGoogleドライブのアプリ専用フォルダに保存されます
+    </p>
+</div>
+
+<header>
+    <div class="header-left">
+        <span>📅</span> デイリー タイムスタンプ メモ
+    </div>
+    <div id="auth-section">
+        <div id="sync-status" class="show syncing">
+            <span class="loading-spinner"></span> 読み込み中...
+        </div>
+        <div id="user-info">
+            <img id="user-avatar" src="" alt="avatar">
+            <span id="user-name"></span>
+            <button id="sign-out-btn" onclick="handleSignOut()">サインアウト</button>
+        </div>
+        <button id="sign-in-btn" onclick="handleSignIn()" style="display:none;">
+            <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
+                <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+                <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/>
+                <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
+            </svg>
+            Googleでサインイン
+        </button>
+    </div>
+</header>
+
+<div class="container" id="app-container">
+    <aside class="sidebar">
+        <div class="sidebar-inner">
+            <!-- カレンダー -->
+            <div>
+                <div class="section-label">📅 カレンダー</div>
+                <div class="calendar-header">
+                    <button class="cal-nav-btn" onclick="moveMonth(-1)">◀</button>
+                    <input type="date" class="calendar-jump-input" id="calendar-jump" onchange="jumpToDate(this.value)">
+                    <button class="cal-nav-btn" onclick="moveMonth(1)">▶</button>
+                </div>
+                <div class="calendar-grid" id="cal-header">
+                    <div class="day-header">日</div><div class="day-header">月</div><div class="day-header">火</div>
+                    <div class="day-header">水</div><div class="day-header">木</div><div class="day-header">金</div>
+                    <div class="day-header">土</div>
+                </div>
+                <div class="calendar-grid" id="calendar-days"></div>
+            </div>
+
+            <!-- 履歴 -->
+            <div class="history-container">
+                <div class="section-label">🗂️ メモ履歴</div>
+                <div class="search-wrapper">
+                    <input type="text" class="search-input" id="search-input"
+                        placeholder="🔍 検索（ファイル名・本文）" oninput="handleSearch(this.value)">
+                    <button class="search-clear-btn" id="search-clear-btn" onclick="clearSearch()">✕</button>
+                </div>
+                <div class="search-match-count" id="search-match-count"></div>
+                <ul class="history-list" id="history-list"></ul>
+            </div>
+        </div>
+    </aside>
+
+    <main class="main-content">
+        <div class="main-toolbar">
+            <div class="file-badge" id="file-name-display">📁 (新規メモ)</div>
+            <button class="toolbar-btn" id="undo-btn" onclick="undo()" disabled>↩ 元に戻す</button>
+            <button class="toolbar-btn" id="redo-btn" onclick="redo()" disabled>↪ やり直し</button>
+            <button class="toolbar-btn primary" onclick="createNewFileMode()">＋ 新規</button>
+            <button class="toolbar-btn" id="fullscreen-btn" onclick="toggleFullscreen()">⛶ 最大化</button>
+        </div>
+        <textarea id="memo-input"
+            placeholder="ここにメモを入力してください…（500ms後に自動保存されます）"
+            oninput="handleInput()"></textarea>
+    </main>
+</div>
+
+<!-- ========================================================
+     Google Identity Services (GIS) ライブラリ
+     ※ インターネット接続が必要です
+======================================================== -->
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+
+<script>
+// ============================================================
+// ★ 設定：クライアントIDを <meta> タグから読み取ります
+//    index.html 先頭の <meta name="google-client-id"> を書き換えてください
+// ============================================================
+const CLIENT_ID = document.querySelector('meta[name="google-client-id"]').content;
+const SCOPES    = 'https://www.googleapis.com/auth/drive.appdata';
+const API_KEY   = ''; // Drive API の呼び出しにはアクセストークンを使うので不要
+const DRIVE_API = 'https://www.googleapis.com/drive/v3';
+const UPLOAD_API= 'https://www.googleapis.com/upload/drive/v3';
+
+// ── 状態 ──
+let accessToken       = null;
+let tokenClient       = null;
+let selectedDate      = new Date();
+let currentCalY       = selectedDate.getFullYear();
+let currentCalM       = selectedDate.getMonth();
+let activeFileName    = '';
+let activeFileId      = '';        // Drive上のファイルID
+let autoSaveTimeout   = null;
+let currentSearchQuery= '';
+let undoStack         = [''];
+let redoStack         = [];
+let isHistoryAction   = false;
+let driveIndex        = {};        // { "2025-01-01_120000_preview.txt": { id, name, modifiedTime } }
+
+// ── DOM refs ──
+const memoInput       = document.getElementById('memo-input');
+const historyList     = document.getElementById('history-list');
+const appContainer    = document.getElementById('app-container');
+const fullscreenBtn   = document.getElementById('fullscreen-btn');
+const calendarDays    = document.getElementById('calendar-days');
+const calJump         = document.getElementById('calendar-jump');
+const fileBadge       = document.getElementById('file-name-display');
+const undoBtn         = document.getElementById('undo-btn');
+const redoBtn         = document.getElementById('redo-btn');
+const searchInput     = document.getElementById('search-input');
+const searchClearBtn  = document.getElementById('search-clear-btn');
+const searchMatchCount= document.getElementById('search-match-count');
+const syncStatus      = document.getElementById('sync-status');
+const loginOverlay    = document.getElementById('login-overlay');
+const userInfo        = document.getElementById('user-info');
+const signInBtn       = document.getElementById('sign-in-btn');
+
+// ============================================================
+// 認証
+// ============================================================
+function initGIS() {
+    tokenClient = google.accounts.oauth2.initTokenClient({
+        client_id: CLIENT_ID,
+        scope: SCOPES,
+        callback: async (resp) => {
+            if (resp.error) { showSyncStatus('error', '認証エラー'); return; }
+            accessToken = resp.access_token;
+            await onSignedIn();
+        }
+    });
+    // サイレントリフレッシュ試行（prompt なし）
+    tokenClient.requestAccessToken({ prompt: '' });
+}
+
+function handleSignIn() {
+    if (!tokenClient) { alert('Google認証ライブラリの読み込み中です。少し待ってからお試しください。'); return; }
+    tokenClient.requestAccessToken({ prompt: 'consent' });
+}
+
+function handleSignOut() {
+    if (accessToken) google.accounts.oauth2.revoke(accessToken, () => {});
+    accessToken = null;
+    userInfo.style.display  = 'none';
+    signInBtn.style.display = 'flex';
+    loginOverlay.style.display = 'flex';
+    showSyncStatus('', '');
+}
+
+async function fetchUserInfo() {
+    const r = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+        headers: { Authorization: `Bearer ${accessToken}` }
+    });
+    return r.json();
+}
+
+async function onSignedIn() {
+    loginOverlay.style.display = 'none';
+    signInBtn.style.display = 'none';
+    userInfo.style.display  = 'flex';
+    showSyncStatus('syncing', '同期中…');
+
+    try {
+        const info = await fetchUserInfo();
+        document.getElementById('user-avatar').src = info.picture;
+        document.getElementById('user-name').textContent = info.name;
+    } catch(e) {}
+
+    await refreshDriveIndex();
+    syncJumpInput();
+    renderCalendar();
+    autoSelectFirstFileForDate();
+    showSyncStatus('synced', '同期済み');
+}
+
+// ============================================================
+// 同期ステータス表示
+// ============================================================
+function showSyncStatus(state, msg) {
+    syncStatus.className = 'show';
+    if (!state) { syncStatus.className = ''; return; }
+    syncStatus.classList.add(state);
+    const icon = state === 'syncing' ? '<span class="loading-spinner"></span>' :
+                 state === 'synced'  ? '✓' : '✗';
+    syncStatus.innerHTML = `${icon} ${msg}`;
+}
+
+// ============================================================
+// Google Drive API helpers
+// ============================================================
+async function driveRequest(url, options = {}) {
+    const headers = {
+        'Authorization': `Bearer ${accessToken}`,
+        ...options.headers
+    };
+    const r = await fetch(url, { ...options, headers });
+    if (!r.ok) {
+        const err = await r.json().catch(() => ({}));
+        throw new Error(err.error?.message || r.statusText);
+    }
+    return r.json();
+}
+
+// Driveインデックス（appDataFolderの一覧）を取得
+async function refreshDriveIndex() {
+    try {
+        const data = await driveRequest(
+            `${DRIVE_API}/files?spaces=appDataFolder&fields=files(id,name,modifiedTime)&pageSize=1000`
+        );
+        driveIndex = {};
+        (data.files || []).forEach(f => { driveIndex[f.name] = f; });
+    } catch(e) {
+        showSyncStatus('error', '一覧取得失敗');
+    }
+}
+
+// ファイル内容を取得
+async function driveGetContent(fileId) {
+    const r = await fetch(`${DRIVE_API}/files/${fileId}?alt=media`, {
+        headers: { Authorization: `Bearer ${accessToken}` }
+    });
+    if (!r.ok) throw new Error('取得失敗');
+    return r.text();
+}
+
+// ファイルを作成または更新（multipart upload）
+async function driveSave(fileName, content, existingId = null) {
+    const metadata = existingId
+        ? {}
+        : { name: fileName, parents: ['appDataFolder'] };
+
+    const boundary = '-------memo_boundary';
+    const body = [
+        `--${boundary}`,
+        'Content-Type: application/json; charset=UTF-8',
+        '',
+        JSON.stringify(metadata),
+        `--${boundary}`,
+        'Content-Type: text/plain; charset=UTF-8',
+        '',
+        content,
+        `--${boundary}--`
+    ].join('\r\n');
+
+    const method  = existingId ? 'PATCH' : 'POST';
+    const url     = existingId
+        ? `${UPLOAD_API}/files/${existingId}?uploadType=multipart&fields=id,name`
+        : `${UPLOAD_API}/files?uploadType=multipart&fields=id,name`;
+
+    const r = await fetch(url, {
+        method,
+        headers: {
+            Authorization: `Bearer ${accessToken}`,
+            'Content-Type': `multipart/related; boundary="${boundary}"`
+        },
+        body
+    });
+    if (!r.ok) {
+        const err = await r.json().catch(() => ({}));
+        throw new Error(err.error?.message || r.statusText);
+    }
+    return r.json();
+}
+
+// ファイルを削除
+async function driveDelete(fileId) {
+    await fetch(`${DRIVE_API}/files/${fileId}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${accessToken}` }
+    });
+}
+
+// ============================================================
+// メモの保存
+// ============================================================
+async function saveMemo() {
+    if (!accessToken) return;
+    const text = memoInput.value.trim();
+
+    if (!text) {
+        // 空ならファイル削除
+        if (activeFileId) {
+            showSyncStatus('syncing', '削除中…');
+            try {
+                await driveDelete(activeFileId);
+                delete driveIndex[activeFileName];
+            } catch(e) {}
+            activeFileName = ''; activeFileId = '';
+            fileBadge.textContent = '📁 (新規メモ)';
+            await refreshDriveIndex();
+            renderHistory();
+            showSyncStatus('synced', '同期済み');
+        }
+        return;
+    }
+
+    showSyncStatus('syncing', '保存中…');
+
+    const cleanText  = text.replace(/\s+/g, ' ');
+    const preview    = cleanText.substring(0, 20);
+    const yyyy = selectedDate.getFullYear();
+    const mm   = String(selectedDate.getMonth() + 1).padStart(2, '0');
+    const dd   = String(selectedDate.getDate()).padStart(2, '0');
+    const now  = new Date();
+    const ts   = String(now.getHours()).padStart(2,'0') +
+                 String(now.getMinutes()).padStart(2,'0') +
+                 String(now.getSeconds()).padStart(2,'0');
+
+    let newName = `${yyyy}-${mm}-${dd}_${ts}_${preview}.txt`;
+    let targetId = activeFileId || null;
+
+    // プレビューが変わっていない場合は同じファイルを上書き
+    if (activeFileName) {
+        const parts   = activeFileName.split('_');
+        const oldPrev = parts.slice(2).join('_').replace('.txt', '');
+        if (oldPrev === preview) {
+            newName  = activeFileName;
+            targetId = activeFileId;
+        } else if (activeFileId) {
+            // ファイル名が変わる場合は旧ファイル削除
+            try { await driveDelete(activeFileId); } catch(e) {}
+            delete driveIndex[activeFileName];
+            targetId = null;
+        }
+    }
+
+    try {
+        const saved = await driveSave(newName, text, targetId);
+        activeFileName = newName;
+        activeFileId   = saved.id;
+        driveIndex[newName] = { id: saved.id, name: newName };
+        fileBadge.textContent = `📁 ${newName}`;
+        renderHistory();
+        showSyncStatus('synced', '同期済み');
+    } catch(e) {
+        showSyncStatus('error', '保存失敗: ' + e.message);
+    }
+}
+
+// ============================================================
+// カレンダー
+// ============================================================
+function syncJumpInput() {
+    const y = selectedDate.getFullYear();
+    const m = String(selectedDate.getMonth()+1).padStart(2,'0');
+    const d = String(selectedDate.getDate()).padStart(2,'0');
+    calJump.value = `${y}-${m}-${d}`;
+    currentCalY = selectedDate.getFullYear();
+    currentCalM = selectedDate.getMonth();
+}
+
+function renderCalendar() {
+    calendarDays.innerHTML = '';
+    const firstDay = new Date(currentCalY, currentCalM, 1).getDay();
+    const total    = new Date(currentCalY, currentCalM + 1, 0).getDate();
+    const today    = new Date();
+
+    for (let i = 0; i < firstDay; i++) {
+        const el = document.createElement('div');
+        el.className = 'day-cell empty';
+        calendarDays.appendChild(el);
+    }
+    for (let day = 1; day <= total; day++) {
+        const el   = document.createElement('div');
+        el.className = 'day-cell';
+        el.textContent = day;
+        const cellDate = new Date(currentCalY, currentCalM, day);
+        if (cellDate.toDateString() === today.toDateString())        el.classList.add('today-marker');
+        if (cellDate.toDateString() === selectedDate.toDateString()) el.classList.add('active');
+
+        // メモがある日にドット表示
+        const y = currentCalY, m = String(currentCalM+1).padStart(2,'0'), d = String(day).padStart(2,'0');
+        const prefix = `${y}-${m}-${d}`;
+        if (Object.keys(driveIndex).some(k => k.startsWith(prefix))) el.classList.add('has-memo');
+
+        el.onclick = () => {
+            selectedDate = cellDate;
+            syncJumpInput(); renderCalendar(); autoSelectFirstFileForDate();
+        };
+        calendarDays.appendChild(el);
+    }
+}
+
+function moveMonth(dir) {
+    currentCalM += dir;
+    if (currentCalM > 11) { currentCalM = 0; currentCalY++; }
+    if (currentCalM < 0)  { currentCalM = 11; currentCalY--; }
+    selectedDate = new Date(currentCalY, currentCalM, 1);
+    syncJumpInput(); renderCalendar(); autoSelectFirstFileForDate();
+}
+
+function jumpToDate(v) {
+    if (!v) return;
+    selectedDate = new Date(v);
+    syncJumpInput(); renderCalendar(); autoSelectFirstFileForDate();
+}
+
+// ============================================================
+// 自動選択（日付変更時に最新ファイルを表示）
+// ============================================================
+async function autoSelectFirstFileForDate() {
+    const y = selectedDate.getFullYear();
+    const m = String(selectedDate.getMonth()+1).padStart(2,'0');
+    const d = String(selectedDate.getDate()).padStart(2,'0');
+    const prefix = `${y}-${m}-${d}`;
+
+    const matched = Object.keys(driveIndex)
+        .filter(k => k.startsWith(prefix))
+        .sort()
+        .reverse();
+
+    if (matched.length > 0) {
+        const key  = matched[0];
+        const info = driveIndex[key];
+        showSyncStatus('syncing', '読み込み中…');
+        try {
+            const text = await driveGetContent(info.id);
+            memoInput.value = text;
+            activeFileName  = key;
+            activeFileId    = info.id;
+            resetUndoRedo(text);
+            fileBadge.textContent = `📁 ${key}`;
+            showSyncStatus('synced', '同期済み');
+        } catch(e) {
+            showSyncStatus('error', '読み込み失敗');
+        }
+    } else {
+        memoInput.value = '';
+        activeFileName  = '';
+        activeFileId    = '';
+        resetUndoRedo('');
+        fileBadge.textContent = '📁 (新規メモ)';
+        showSyncStatus('synced', '同期済み');
+    }
+    renderHistory();
+}
+
+// ============================================================
+// 履歴表示
+// ============================================================
+function renderHistory() {
+    historyList.innerHTML = '';
+    const query  = currentSearchQuery.toLowerCase();
+    const keys   = Object.keys(driveIndex).sort().reverse();
+    let matchCount = 0;
+
+    keys.forEach(key => {
+        if (query) {
+            if (!key.toLowerCase().includes(query)) return;
+        }
+        matchCount++;
+        const li = document.createElement('li');
+        li.className = 'history-item' + (key === activeFileName ? ' active-item' : '');
+
+        const textWrap = document.createElement('div');
+        textWrap.style.flex = '1';
+        textWrap.style.overflow = 'hidden';
+
+        const nameSpan = document.createElement('div');
+        nameSpan.className = 'history-text';
+        nameSpan.innerHTML = '📄 ' + (query ? highlightText(key, currentSearchQuery) : key);
+        textWrap.appendChild(nameSpan);
+
+        li.onclick = async () => {
+            const info = driveIndex[key];
+            const datePart = key.substring(0, 10);
+            if (/^\d{4}-\d{2}-\d{2}$/.test(datePart)) {
+                selectedDate = new Date(datePart);
+                syncJumpInput(); renderCalendar();
+            }
+            showSyncStatus('syncing', '読み込み中…');
+            try {
+                const text = await driveGetContent(info.id);
+                memoInput.value = text;
+                activeFileName  = key;
+                activeFileId    = info.id;
+                resetUndoRedo(text);
+                fileBadge.textContent = `📁 ${key}`;
+                showSyncStatus('synced', '同期済み');
+            } catch(e) {
+                showSyncStatus('error', '読み込み失敗');
+            }
+            renderHistory();
+        };
+
+        const delBtn = document.createElement('button');
+        delBtn.className = 'delete-btn';
+        delBtn.textContent = '🗑';
+        delBtn.onclick = async (e) => {
+            e.stopPropagation();
+            if (!confirm(`${key} を削除しますか？`)) return;
+            showSyncStatus('syncing', '削除中…');
+            try {
+                await driveDelete(driveIndex[key].id);
+                delete driveIndex[key];
+                if (activeFileName === key) {
+                    activeFileName = ''; activeFileId = '';
+                    memoInput.value = '';
+                    resetUndoRedo('');
+                    fileBadge.textContent = '📁 (新規メモ)';
+                }
+                renderHistory(); renderCalendar();
+                showSyncStatus('synced', '同期済み');
+            } catch(e) {
+                showSyncStatus('error', '削除失敗');
+            }
+        };
+
+        li.appendChild(textWrap);
+        li.appendChild(delBtn);
+        historyList.appendChild(li);
+    });
+
+    if (query) {
+        const total = Object.keys(driveIndex).length;
+        searchMatchCount.textContent = `${matchCount} / ${total} 件がヒット`;
+    } else {
+        searchMatchCount.textContent = '';
+    }
+}
+
+// ============================================================
+// 検索
+// ============================================================
+function handleSearch(q) {
+    currentSearchQuery = q.trim();
+    searchClearBtn.classList.toggle('visible', currentSearchQuery.length > 0);
+    renderHistory();
+}
+function clearSearch() {
+    searchInput.value = '';
+    currentSearchQuery = '';
+    searchClearBtn.classList.remove('visible');
+    searchMatchCount.textContent = '';
+    renderHistory();
+}
+function highlightText(text, query) {
+    const esc = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    return text.replace(new RegExp(`(${esc})`, 'gi'), '<mark class="search-highlight">$1</mark>');
+}
+
+// ============================================================
+// テキストエリア・Undo/Redo
+// ============================================================
+function handleInput() {
+    if (!isHistoryAction) {
+        const t = memoInput.value;
+        if (t !== undoStack[undoStack.length-1]) {
+            undoStack.push(t); redoStack = []; updateUndoRedoButtons();
+        }
+    }
+    isHistoryAction = false;
+    clearTimeout(autoSaveTimeout);
+    autoSaveTimeout = setTimeout(saveMemo, 500);
+}
+
+function undo() {
+    if (undoStack.length <= 1) return;
+    redoStack.push(undoStack.pop());
+    isHistoryAction = true;
+    memoInput.value = undoStack[undoStack.length-1];
+    updateUndoRedoButtons(); saveMemo();
+}
+function redo() {
+    if (redoStack.length === 0) return;
+    const next = redoStack.pop();
+    undoStack.push(next);
+    isHistoryAction = true;
+    memoInput.value = next;
+    updateUndoRedoButtons(); saveMemo();
+}
+function updateUndoRedoButtons() {
+    undoBtn.disabled = undoStack.length <= 1;
+    redoBtn.disabled = redoStack.length === 0;
+}
+function resetUndoRedo(text = '') {
+    undoStack = [text]; redoStack = []; updateUndoRedoButtons();
+}
+
+function createNewFileMode() {
+    activeFileName = ''; activeFileId = '';
+    memoInput.value = '';
+    resetUndoRedo('');
+    fileBadge.textContent = '📁 (新規メモ)';
+    renderHistory();
+    memoInput.focus();
+}
+
+function toggleFullscreen() {
+    appContainer.classList.toggle('fullscreen');
+    fullscreenBtn.textContent = appContainer.classList.contains('fullscreen') ? '✕ 元に戻す' : '⛶ 最大化';
+}
+
+// ============================================================
+// GIS 初期化（ライブラリ読み込み後に呼ばれる）
+// ============================================================
+window.onload = () => {
+    // GIS ライブラリが非同期読み込みなのでポーリング
+    const wait = setInterval(() => {
+        if (typeof google !== 'undefined' && google.accounts) {
+            clearInterval(wait);
+            initGIS();
+        }
+    }, 200);
+};
+</script>
+</body>
+</html>
