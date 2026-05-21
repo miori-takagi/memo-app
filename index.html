@@ -823,13 +823,12 @@ async function saveMemo() {
                  String(now.getMinutes()).padStart(2,'0') +
                  String(now.getSeconds()).padStart(2,'0');
 
-    let newName = `${yyyy}-${mm}-${dd}_${ts}_${preview}.txt`;
+    let newName = `${yyyy}${mm}${dd}_${ts}_${preview}.txt`;
     let targetId = activeFileId || null;
 
     // プレビューが変わっていない場合は同じファイルを上書き
     if (activeFileName) {
-        const parts   = activeFileName.split('_');
-        const oldPrev = parts.slice(2).join('_').replace('.txt', '');
+        const oldPrev = activeFileName.replace(/^\d{8}_\d{6}_/, '').replace('.txt', '');
         if (oldPrev === preview) {
             newName  = activeFileName;
             targetId = activeFileId;
@@ -887,10 +886,11 @@ function renderCalendar() {
 
         // メモがある日にドット表示
         const y = currentCalY, m = String(currentCalM+1).padStart(2,'0'), d = String(day).padStart(2,'0');
-        const prefix = `${y}-${m}-${d}`;
+        const prefix = `${y}${m}${d}`;
         if (Object.keys(driveIndex).some(k => k.startsWith(prefix))) el.classList.add('has-memo');
 
         el.onclick = () => {
+            if (!confirmDiscard()) return;
             selectedDate = cellDate;
             syncJumpInput(); renderCalendar(); autoSelectFirstFileForDate();
         };
@@ -899,6 +899,7 @@ function renderCalendar() {
 }
 
 function moveMonth(dir) {
+    if (!confirmDiscard()) return;
     currentCalM += dir;
     if (currentCalM > 11) { currentCalM = 0; currentCalY++; }
     if (currentCalM < 0)  { currentCalM = 11; currentCalY--; }
@@ -908,6 +909,7 @@ function moveMonth(dir) {
 
 function jumpToDate(v) {
     if (!v) return;
+    if (!confirmDiscard()) return;
     selectedDate = new Date(v);
     syncJumpInput(); renderCalendar(); autoSelectFirstFileForDate();
 }
@@ -919,7 +921,7 @@ async function autoSelectFirstFileForDate() {
     const y = selectedDate.getFullYear();
     const m = String(selectedDate.getMonth()+1).padStart(2,'0');
     const d = String(selectedDate.getDate()).padStart(2,'0');
-    const prefix = `${y}-${m}-${d}`;
+    const prefix = `${y}${m}${d}`;
 
     const matched = Object.keys(driveIndex)
         .filter(k => k.startsWith(prefix))
@@ -936,6 +938,7 @@ async function autoSelectFirstFileForDate() {
             activeFileName  = key;
             activeFileId    = info.id;
             resetUndoRedo(text);
+            savedText = text;
             fileBadge.textContent = `📁 ${key}`;
             showSyncStatus('synced', '同期済み');
         } catch(e) {
@@ -946,6 +949,7 @@ async function autoSelectFirstFileForDate() {
         activeFileName  = '';
         activeFileId    = '';
         resetUndoRedo('');
+        savedText = '';
         fileBadge.textContent = '📁 (新規メモ)';
         showSyncStatus('synced', '同期済み');
     }
@@ -979,10 +983,14 @@ function renderHistory() {
         textWrap.appendChild(nameSpan);
 
         li.onclick = async () => {
+            if (!confirmDiscard()) return;
             const info = driveIndex[key];
-            const datePart = key.substring(0, 10);
-            if (/^\d{4}-\d{2}-\d{2}$/.test(datePart)) {
-                selectedDate = new Date(datePart);
+            const datePart = key.substring(0, 8);
+            if (/^\d{8}$/.test(datePart)) {
+                const y = parseInt(datePart.substring(0,4));
+                const m = parseInt(datePart.substring(4,6)) - 1;
+                const d = parseInt(datePart.substring(6,8));
+                selectedDate = new Date(y, m, d);
                 syncJumpInput(); renderCalendar();
             }
             showSyncStatus('syncing', '読み込み中…');
@@ -992,6 +1000,7 @@ function renderHistory() {
                 activeFileName  = key;
                 activeFileId    = info.id;
                 resetUndoRedo(text);
+                savedText = text;
                 fileBadge.textContent = `📁 ${key}`;
                 showSyncStatus('synced', '同期済み');
             } catch(e) {
@@ -1062,6 +1071,15 @@ function highlightText(text, query) {
 const saveBtn = document.getElementById('save-btn');
 
 // フォーカス取得時のテキスト（変更検知用）
+let savedText = '';  // 最後に保存した（またはロードした）テキスト
+
+// 未保存の変更があるか確認し、あればダイアログを出す。
+// 「はい（破棄）」または変更なし → true を返す（遷移してよい）
+// 「いいえ」→ false を返す（遷移をキャンセル）
+function confirmDiscard() {
+    if (memoInput.value === savedText) return true;
+    return confirm('変更は破棄されます。よろしいですか？');
+}
 
 function handleInput() {
     if (!isHistoryAction) {
@@ -1073,11 +1091,10 @@ function handleInput() {
     isHistoryAction = false;
 }
 
-
-
 // 保存ボタン押下
 function handleSaveBtn() {
     saveMemo();
+    savedText = memoInput.value;
     setTimeout(() => memoInput.focus(), 0);
 }
 
@@ -1105,9 +1122,11 @@ function resetUndoRedo(text = '') {
 }
 
 function createNewFileMode() {
+    if (!confirmDiscard()) return;
     activeFileName = ''; activeFileId = '';
     memoInput.value = '';
     resetUndoRedo('');
+    savedText = '';
     fileBadge.textContent = '📁 (新規メモ)';
     renderHistory();
     setTimeout(() => memoInput.focus(), 0);
