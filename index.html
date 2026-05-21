@@ -1058,6 +1058,8 @@ function highlightText(text, query) {
 // ============================================================
 // テキストエリア・Undo/Redo
 // ============================================================
+let lastKeyWasEnter = false;
+
 function handleInput() {
     if (!isHistoryAction) {
         const t = memoInput.value;
@@ -1066,15 +1068,24 @@ function handleInput() {
         }
     }
     isHistoryAction = false;
+
+    // Enterキー直後の入力イベントは保存タイマーをリセットするだけ（保存しない）
     clearTimeout(autoSaveTimeout);
-    autoSaveTimeout = setTimeout(saveMemo, 500);
+    if (!lastKeyWasEnter) {
+        autoSaveTimeout = setTimeout(saveMemo, 500);
+    } else {
+        // Enter後は次の文字入力を待ってから保存
+        autoSaveTimeout = setTimeout(saveMemo, 1000);
+    }
+    lastKeyWasEnter = false;
 }
 
-// Enterキー単体では保存のタイミングをリセットしない（改行のみ）
 memoInput.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter' && !e.shiftKey && !e.ctrlKey && !e.metaKey) {
-        clearTimeout(autoSaveTimeout);
-        autoSaveTimeout = setTimeout(saveMemo, 1500); // Enterは長めに待つ
+    if (e.key === 'Enter') {
+        lastKeyWasEnter = true;
+        clearTimeout(autoSaveTimeout); // Enterを押した瞬間の保存を防ぐ
+    } else {
+        lastKeyWasEnter = false;
     }
 });
 
