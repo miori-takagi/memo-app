@@ -330,27 +330,56 @@
             flex: 1;
         }
 
+        /* 年グループ */
+        .year-group { margin-bottom: 10px; }
+
+        .year-group-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 8px 12px;
+            background: var(--accent);
+            border: none;
+            border-radius: var(--radius);
+            cursor: pointer;
+            font-size: 0.85rem;
+            font-weight: 700;
+            color: white;
+            user-select: none;
+            letter-spacing: 0.04em;
+            box-shadow: 0 2px 6px rgba(74,123,224,0.25);
+            transition: background 0.15s, box-shadow 0.15s;
+        }
+        .year-group-header:hover { background: var(--accent-hover); box-shadow: 0 3px 10px rgba(74,123,224,0.35); }
+        .year-group-header.current-year { background: var(--accent); outline: 2px solid var(--accent-hover); }
+        .year-group-header .mg-icon { font-size: 0.75rem; transition: transform 0.2s; opacity: 0.85; }
+        .year-group-header.collapsed .mg-icon { transform: rotate(-90deg); }
+
+        .year-group-body { overflow: hidden; transition: max-height 0.25s ease; max-height: 5000px; padding-left: 10px; margin-top: 5px; border-left: 2px solid var(--accent); }
+        .year-group-body.collapsed { max-height: 0; }
+
         /* 月グループ */
-        .month-group { margin-bottom: 6px; }
+        .month-group { margin-bottom: 5px; }
 
         .month-group-header {
             display: flex;
             align-items: center;
             justify-content: space-between;
-            padding: 5px 8px;
+            padding: 6px 10px;
             background: var(--surface2);
             border: 1px solid var(--border);
+            border-left: 3px solid var(--accent);
             border-radius: var(--radius);
             cursor: pointer;
-            font-size: 0.78rem;
+            font-size: 0.8rem;
             font-weight: 700;
-            color: var(--text-muted);
+            color: var(--text);
             user-select: none;
-            transition: background 0.15s;
+            transition: background 0.15s, border-color 0.15s;
         }
-        .month-group-header:hover { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
-        .month-group-header.current-month { color: var(--accent); border-color: var(--accent); background: var(--accent-soft); }
-        .month-group-header .mg-icon { font-size: 0.7rem; transition: transform 0.2s; }
+        .month-group-header:hover { background: var(--accent-soft); border-left-color: var(--accent-hover); }
+        .month-group-header.current-month { background: var(--accent-soft); border-left-color: var(--accent); color: var(--accent); }
+        .month-group-header .mg-icon { font-size: 0.7rem; transition: transform 0.2s; color: var(--text-muted); }
         .month-group-header.collapsed .mg-icon { transform: rotate(-90deg); }
 
         .month-group-body { overflow: hidden; transition: max-height 0.25s ease; max-height: 2000px; }
@@ -971,6 +1000,7 @@ function moveMonth(dir) {
     if (currentCalM < 0)  { currentCalM = 11; currentCalY--; }
     selectedDate = new Date(currentCalY, currentCalM, 1);
     const mk = `${currentCalY}${String(currentCalM+1).padStart(2,'0')}`;
+    expandedYears.add(`${currentCalY}`);
     expandedMonths.add(mk);
     syncJumpInput(); renderCalendar(); autoSelectFirstFileForDate();
 }
@@ -1025,10 +1055,10 @@ async function autoSelectFirstFileForDate() {
 }
 
 // ============================================================
-// 履歴表示（月グループ）
+// 履歴表示（年→月グループ）
 // ============================================================
 
-// 展開済み月セット（カレント月はデフォルト展開）
+const expandedYears  = new Set();
 const expandedMonths = new Set();
 
 function renderHistory() {
@@ -1037,138 +1067,180 @@ function renderHistory() {
     const query = currentSearchQuery.toLowerCase();
     const keys  = Object.keys(driveIndex).sort().reverse();
 
-    // 現在表示中の年月キー
+    const currentYearKey  = `${currentCalY}`;
     const currentMonthKey = `${currentCalY}${String(currentCalM+1).padStart(2,'0')}`;
+
     if (!expandedMonths.has('_init')) {
+        expandedYears.add(currentYearKey);
         expandedMonths.add(currentMonthKey);
         expandedMonths.add('_init');
     }
 
-    // 月ごとにグループ化
-    const groups = {}; // { "202605": [key, ...] }
+    // 年→月→ファイル でグループ化
+    // yearGroups: { "2026": { "202605": [key,...], ... }, ... }
+    const yearGroups = {};
     let totalMatch = 0;
 
     keys.forEach(key => {
         if (query && !key.toLowerCase().includes(query)) return;
         totalMatch++;
-        const monthKey = key.substring(0, 6); // YYYYMM
-        if (!groups[monthKey]) groups[monthKey] = [];
-        groups[monthKey].push(key);
+        const yearKey  = key.substring(0, 4);
+        const monthKey = key.substring(0, 6);
+        if (!yearGroups[yearKey]) yearGroups[yearKey] = {};
+        if (!yearGroups[yearKey][monthKey]) yearGroups[yearKey][monthKey] = [];
+        yearGroups[yearKey][monthKey].push(key);
     });
 
-    const monthKeys = Object.keys(groups).sort().reverse();
+    const yearKeys = Object.keys(yearGroups).sort().reverse();
 
-    if (monthKeys.length === 0) {
+    if (yearKeys.length === 0) {
         container.innerHTML = '<div style="color:var(--text-muted);font-size:0.8rem;padding:8px 4px;">ファイルがありません</div>';
+        return;
     }
 
-    monthKeys.forEach(monthKey => {
-        const y = monthKey.substring(0, 4);
-        const m = monthKey.substring(4, 6);
-        const label = `${y}年${parseInt(m)}月`;
-        const isCurrentMonth = monthKey === currentMonthKey;
-        const isExpanded = expandedMonths.has(monthKey) || isCurrentMonth;
+    yearKeys.forEach(yearKey => {
+        const monthKeys   = Object.keys(yearGroups[yearKey]).sort().reverse();
+        const yearTotal   = monthKeys.reduce((s, mk) => s + yearGroups[yearKey][mk].length, 0);
+        const isCurrentY  = yearKey === currentYearKey;
+        const isYExpanded = expandedYears.has(yearKey) || isCurrentY;
 
-        const group = document.createElement('div');
-        group.className = 'month-group';
+        // ── 年グループ ──
+        const yearGroup = document.createElement('div');
+        yearGroup.className = 'year-group';
 
-        // 月ヘッダー
-        const header = document.createElement('div');
-        header.className = 'month-group-header' +
-            (isCurrentMonth ? ' current-month' : '') +
-            (isExpanded ? '' : ' collapsed');
-        header.innerHTML = `<span>📁 ${label} (${groups[monthKey].length}件)</span><span class="mg-icon">▼</span>`;
-        header.onclick = () => {
-            if (expandedMonths.has(monthKey)) {
-                expandedMonths.delete(monthKey);
-                header.classList.add('collapsed');
-                body.classList.add('collapsed');
+        const yearHeader = document.createElement('div');
+        yearHeader.className = 'year-group-header' +
+            (isCurrentY  ? ' current-year'  : '') +
+            (isYExpanded ? '' : ' collapsed');
+        yearHeader.innerHTML = `<span>🗂 ${yearKey}年 (${yearTotal}件)</span><span class="mg-icon">▼</span>`;
+
+        const yearBody = document.createElement('div');
+        yearBody.className = 'year-group-body' + (isYExpanded ? '' : ' collapsed');
+
+        yearHeader.onclick = () => {
+            if (expandedYears.has(yearKey)) {
+                expandedYears.delete(yearKey);
+                yearHeader.classList.add('collapsed');
+                yearBody.classList.add('collapsed');
             } else {
-                expandedMonths.add(monthKey);
-                header.classList.remove('collapsed');
-                body.classList.remove('collapsed');
+                expandedYears.add(yearKey);
+                yearHeader.classList.remove('collapsed');
+                yearBody.classList.remove('collapsed');
             }
         };
 
-        // 月ボディ
-        const body = document.createElement('div');
-        body.className = 'month-group-body' + (isExpanded ? '' : ' collapsed');
+        // ── 月グループ（年の中）──
+        monthKeys.forEach(monthKey => {
+            const m            = monthKey.substring(4, 6);
+            const label        = `${parseInt(m)}月`;
+            const isCurrentM   = monthKey === currentMonthKey;
+            const isMExpanded  = expandedMonths.has(monthKey) || isCurrentM;
 
-        const ul = document.createElement('ul');
-        ul.className = 'history-list';
+            const monthGroup = document.createElement('div');
+            monthGroup.className = 'month-group';
 
-        groups[monthKey].forEach(key => {
-            const li = document.createElement('li');
-            li.className = 'history-item' + (key === activeFileName ? ' active-item' : '');
+            const monthHeader = document.createElement('div');
+            monthHeader.className = 'month-group-header' +
+                (isCurrentM  ? ' current-month' : '') +
+                (isMExpanded ? '' : ' collapsed');
+            monthHeader.innerHTML = `<span>📁 ${label} (${yearGroups[yearKey][monthKey].length}件)</span><span class="mg-icon">▼</span>`;
 
-            const textWrap = document.createElement('div');
-            textWrap.style.cssText = 'flex:1;overflow:hidden';
+            const monthBody = document.createElement('div');
+            monthBody.className = 'month-group-body' + (isMExpanded ? '' : ' collapsed');
 
-            const nameSpan = document.createElement('div');
-            nameSpan.className = 'history-text';
-            nameSpan.innerHTML = '📄 ' + (query ? highlightText(key, currentSearchQuery) : key);
-            textWrap.appendChild(nameSpan);
-
-            li.onclick = async () => {
-                if (!confirmDiscard()) return;
-                const info = driveIndex[key];
-                const datePart = key.substring(0, 8);
-                if (/^\d{8}$/.test(datePart)) {
-                    const yr = parseInt(datePart.substring(0,4));
-                    const mo = parseInt(datePart.substring(4,6)) - 1;
-                    const dy = parseInt(datePart.substring(6,8));
-                    selectedDate = new Date(yr, mo, dy);
-                    syncJumpInput(); renderCalendar();
+            monthHeader.onclick = () => {
+                if (expandedMonths.has(monthKey)) {
+                    expandedMonths.delete(monthKey);
+                    monthHeader.classList.add('collapsed');
+                    monthBody.classList.add('collapsed');
+                } else {
+                    expandedMonths.add(monthKey);
+                    monthHeader.classList.remove('collapsed');
+                    monthBody.classList.remove('collapsed');
                 }
-                showSyncStatus('syncing', '読み込み中…');
-                try {
-                    const text = await driveGetContent(info.id);
-                    memoInput.value = text;
-                    activeFileName  = key;
-                    activeFileId    = info.id;
-                    resetUndoRedo(text);
-                    savedText = text;
-                    fileBadge.textContent = `📁 ${key}`;
-                    showSyncStatus('synced', '同期済み');
-                } catch(e) {
-                    showSyncStatus('error', '読み込み失敗');
-                }
-                renderHistory();
             };
 
-            const delBtn = document.createElement('button');
-            delBtn.className = 'delete-btn';
-            delBtn.textContent = '🗑';
-            delBtn.onclick = async (e) => {
-                e.stopPropagation();
-                if (!confirm(`${key} を削除しますか？`)) return;
-                showSyncStatus('syncing', '削除中…');
-                try {
-                    await driveDelete(driveIndex[key].id);
-                    delete driveIndex[key];
-                    if (activeFileName === key) {
-                        activeFileName = ''; activeFileId = '';
-                        memoInput.value = '';
-                        resetUndoRedo('');
-                        savedText = '';
-                        fileBadge.textContent = '📁 (新規メモ)';
+            // ── ファイル一覧 ──
+            const ul = document.createElement('ul');
+            ul.className = 'history-list';
+
+            yearGroups[yearKey][monthKey].forEach(key => {
+                const li = document.createElement('li');
+                li.className = 'history-item' + (key === activeFileName ? ' active-item' : '');
+
+                const textWrap = document.createElement('div');
+                textWrap.style.cssText = 'flex:1;overflow:hidden';
+
+                const nameSpan = document.createElement('div');
+                nameSpan.className = 'history-text';
+                nameSpan.innerHTML = '📄 ' + (query ? highlightText(key, currentSearchQuery) : key);
+                textWrap.appendChild(nameSpan);
+
+                li.onclick = async () => {
+                    if (!confirmDiscard()) return;
+                    const info = driveIndex[key];
+                    const datePart = key.substring(0, 8);
+                    if (/^\d{8}$/.test(datePart)) {
+                        const yr = parseInt(datePart.substring(0,4));
+                        const mo = parseInt(datePart.substring(4,6)) - 1;
+                        const dy = parseInt(datePart.substring(6,8));
+                        selectedDate = new Date(yr, mo, dy);
+                        syncJumpInput(); renderCalendar();
                     }
-                    renderHistory(); renderCalendar();
-                    showSyncStatus('synced', '同期済み');
-                } catch(e) {
-                    showSyncStatus('error', '削除失敗');
-                }
-            };
+                    showSyncStatus('syncing', '読み込み中…');
+                    try {
+                        const text = await driveGetContent(info.id);
+                        memoInput.value = text;
+                        activeFileName  = key;
+                        activeFileId    = info.id;
+                        resetUndoRedo(text);
+                        savedText = text;
+                        fileBadge.textContent = `📁 ${key}`;
+                        showSyncStatus('synced', '同期済み');
+                    } catch(e) {
+                        showSyncStatus('error', '読み込み失敗');
+                    }
+                    renderHistory();
+                };
 
-            li.appendChild(textWrap);
-            li.appendChild(delBtn);
-            ul.appendChild(li);
+                const delBtn = document.createElement('button');
+                delBtn.className = 'delete-btn';
+                delBtn.textContent = '🗑';
+                delBtn.onclick = async (e) => {
+                    e.stopPropagation();
+                    if (!confirm(`${key} を削除しますか？`)) return;
+                    showSyncStatus('syncing', '削除中…');
+                    try {
+                        await driveDelete(driveIndex[key].id);
+                        delete driveIndex[key];
+                        if (activeFileName === key) {
+                            activeFileName = ''; activeFileId = '';
+                            memoInput.value = '';
+                            resetUndoRedo('');
+                            savedText = '';
+                            fileBadge.textContent = '📁 (新規メモ)';
+                        }
+                        renderHistory(); renderCalendar();
+                        showSyncStatus('synced', '同期済み');
+                    } catch(e) {
+                        showSyncStatus('error', '削除失敗');
+                    }
+                };
+
+                li.appendChild(textWrap);
+                li.appendChild(delBtn);
+                ul.appendChild(li);
+            });
+
+            monthBody.appendChild(ul);
+            monthGroup.appendChild(monthHeader);
+            monthGroup.appendChild(monthBody);
+            yearBody.appendChild(monthGroup);
         });
 
-        body.appendChild(ul);
-        group.appendChild(header);
-        group.appendChild(body);
-        container.appendChild(group);
+        yearGroup.appendChild(yearHeader);
+        yearGroup.appendChild(yearBody);
+        container.appendChild(yearGroup);
     });
 
     if (query) {
