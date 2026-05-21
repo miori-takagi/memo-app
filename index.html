@@ -1070,6 +1070,14 @@ function handleInput() {
     autoSaveTimeout = setTimeout(saveMemo, 500);
 }
 
+// Enterキー単体では保存のタイミングをリセットしない（改行のみ）
+memoInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey && !e.ctrlKey && !e.metaKey) {
+        clearTimeout(autoSaveTimeout);
+        autoSaveTimeout = setTimeout(saveMemo, 1500); // Enterは長めに待つ
+    }
+});
+
 function undo() {
     if (undoStack.length <= 1) return;
     redoStack.push(undoStack.pop());
@@ -1099,7 +1107,8 @@ function createNewFileMode() {
     resetUndoRedo('');
     fileBadge.textContent = '📁 (新規メモ)';
     renderHistory();
-    memoInput.focus();
+    // ボタンのフォーカスが外れてからtextareaにフォーカスを移す
+    setTimeout(() => memoInput.focus(), 0);
 }
 
 function toggleFullscreen() {
