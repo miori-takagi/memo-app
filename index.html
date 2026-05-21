@@ -813,31 +813,37 @@ async function saveMemo() {
 
     showSyncStatus('syncing', '保存中…');
 
-    const cleanText  = text.replace(/\s+/g, ' ');
-    const preview    = cleanText.substring(0, 20);
-    const yyyy = selectedDate.getFullYear();
-    const mm   = String(selectedDate.getMonth() + 1).padStart(2, '0');
-    const dd   = String(selectedDate.getDate()).padStart(2, '0');
-    const now  = new Date();
-    const ts   = String(now.getHours()).padStart(2,'0') +
-                 String(now.getMinutes()).padStart(2,'0') +
-                 String(now.getSeconds()).padStart(2,'0');
+    const cleanText = text.replace(/\s+/g, ' ');
+    const preview   = cleanText.substring(0, 20);
 
-    let newName = `${yyyy}${mm}${dd}_${ts}_${preview}.txt`;
+    let newName  = '';
     let targetId = activeFileId || null;
 
-    // プレビューが変わっていない場合は同じファイルを上書き
     if (activeFileName) {
-        const oldPrev = activeFileName.replace(/^\d{8}_\d{6}_/, '').replace('.txt', '');
-        if (oldPrev === preview) {
-            newName  = activeFileName;
-            targetId = activeFileId;
-        } else if (activeFileId) {
-            // ファイル名が変わる場合は旧ファイル削除
+        // 既存ファイル：タイムスタンプ部分はそのまま、プレビュー部分だけ更新
+        const match = activeFileName.match(/^(\d{8}_\d{6}_)(.+)(\.txt)$/);
+        if (match) {
+            newName = `${match[1]}${preview}${match[3]}`;
+        } else {
+            newName = activeFileName;
+        }
+        // ファイル名が変わる場合は旧ファイルを削除
+        if (newName !== activeFileName && activeFileId) {
             try { await driveDelete(activeFileId); } catch(e) {}
             delete driveIndex[activeFileName];
             targetId = null;
         }
+    } else {
+        // 新規ファイル：現在時刻でタイムスタンプを生成
+        const yyyy = selectedDate.getFullYear();
+        const mm   = String(selectedDate.getMonth() + 1).padStart(2, '0');
+        const dd   = String(selectedDate.getDate()).padStart(2, '0');
+        const now  = new Date();
+        const ts   = String(now.getHours()).padStart(2,'0') +
+                     String(now.getMinutes()).padStart(2,'0') +
+                     String(now.getSeconds()).padStart(2,'0');
+        newName  = `${yyyy}${mm}${dd}_${ts}_${preview}.txt`;
+        targetId = null;
     }
 
     try {
