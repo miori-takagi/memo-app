@@ -464,16 +464,34 @@
         .container.fullscreen .sidebar { width: 0; }
         .container.fullscreen .sidebar .sidebar-inner { display: none; }
 
+        /* ── カレンダー折りたたみ ── */
+        .section-toggle {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            cursor: pointer;
+            user-select: none;
+        }
+        .section-toggle .toggle-icon {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            transition: transform 0.2s;
+        }
+        .section-toggle.collapsed .toggle-icon { transform: rotate(-90deg); }
+        .collapsible { overflow: hidden; transition: max-height 0.25s ease; max-height: 400px; }
+        .collapsible.collapsed { max-height: 0; }
+
         /* ── スマホ対応 ── */
         @media (max-width: 768px) {
             .container { flex-direction: column; }
             .sidebar {
                 width: 100% !important;
-                height: 360px;
+                height: auto;
+                max-height: 55vh;
                 border-right: none;
                 border-bottom: 1px solid var(--border);
             }
-            .container.fullscreen .sidebar { height: 0; }
+            .container.fullscreen .sidebar { max-height: 0; overflow: hidden; }
             .container.fullscreen .sidebar .sidebar-inner { display: none; }
         }
 
@@ -545,18 +563,23 @@
         <div class="sidebar-inner">
             <!-- カレンダー -->
             <div>
-                <div class="section-label">📅 カレンダー</div>
-                <div class="calendar-header">
-                    <button class="cal-nav-btn" onclick="moveMonth(-1)">◀</button>
-                    <input type="date" class="calendar-jump-input" id="calendar-jump" onchange="jumpToDate(this.value)">
-                    <button class="cal-nav-btn" onclick="moveMonth(1)">▶</button>
+                <div class="section-label section-toggle" id="cal-toggle" onclick="toggleCalendar()">
+                    <span>📅 カレンダー</span>
+                    <span class="toggle-icon">▼</span>
                 </div>
-                <div class="calendar-grid" id="cal-header">
-                    <div class="day-header">日</div><div class="day-header">月</div><div class="day-header">火</div>
-                    <div class="day-header">水</div><div class="day-header">木</div><div class="day-header">金</div>
-                    <div class="day-header">土</div>
+                <div class="collapsible" id="cal-collapsible">
+                    <div class="calendar-header">
+                        <button class="cal-nav-btn" onclick="moveMonth(-1)">◀</button>
+                        <input type="date" class="calendar-jump-input" id="calendar-jump" onchange="jumpToDate(this.value)">
+                        <button class="cal-nav-btn" onclick="moveMonth(1)">▶</button>
+                    </div>
+                    <div class="calendar-grid" id="cal-header">
+                        <div class="day-header">日</div><div class="day-header">月</div><div class="day-header">火</div>
+                        <div class="day-header">水</div><div class="day-header">木</div><div class="day-header">金</div>
+                        <div class="day-header">土</div>
+                    </div>
+                    <div class="calendar-grid" id="calendar-days"></div>
                 </div>
-                <div class="calendar-grid" id="calendar-days"></div>
             </div>
 
             <!-- 履歴 -->
@@ -1145,6 +1168,13 @@ function createNewFileMode() {
     fileBadge.textContent = '📁 (新規メモ)';
     renderHistory();
     setTimeout(() => memoInput.focus(), 0);
+}
+
+function toggleCalendar() {
+    const toggle = document.getElementById('cal-toggle');
+    const body   = document.getElementById('cal-collapsible');
+    toggle.classList.toggle('collapsed');
+    body.classList.toggle('collapsed');
 }
 
 function toggleFullscreen() {
