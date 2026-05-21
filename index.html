@@ -194,10 +194,15 @@
             padding: 16px;
             display: flex;
             flex-direction: column;
-            gap: 16px;
+            gap: 10px;
             height: 100%;
-            overflow: hidden;
+            overflow-y: auto;
+            overflow-x: hidden;
         }
+        .sidebar-inner::-webkit-scrollbar { width: 4px; }
+        .sidebar-inner::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+        .sidebar-section { flex-shrink: 0; }
 
         .section-label {
             font-size: 0.72rem;
@@ -323,14 +328,35 @@
         /* 履歴 */
         .history-container {
             flex: 1;
-            overflow-y: auto;
-            overflow-x: hidden;
         }
-        .history-container::-webkit-scrollbar { width: 4px; }
-        .history-container::-webkit-scrollbar-track { background: transparent; }
-        .history-container::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
 
-        .history-list { list-style: none; display: flex; flex-direction: column; gap: 4px; margin-top: 8px; }
+        /* 月グループ */
+        .month-group { margin-bottom: 6px; }
+
+        .month-group-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 5px 8px;
+            background: var(--surface2);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            cursor: pointer;
+            font-size: 0.78rem;
+            font-weight: 700;
+            color: var(--text-muted);
+            user-select: none;
+            transition: background 0.15s;
+        }
+        .month-group-header:hover { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
+        .month-group-header.current-month { color: var(--accent); border-color: var(--accent); background: var(--accent-soft); }
+        .month-group-header .mg-icon { font-size: 0.7rem; transition: transform 0.2s; }
+        .month-group-header.collapsed .mg-icon { transform: rotate(-90deg); }
+
+        .month-group-body { overflow: hidden; transition: max-height 0.25s ease; max-height: 2000px; }
+        .month-group-body.collapsed { max-height: 0; }
+
+        .history-list { list-style: none; display: flex; flex-direction: column; gap: 3px; padding-top: 4px; }
 
         .history-item {
             padding: 9px 10px;
@@ -562,36 +588,39 @@
     <aside class="sidebar">
         <div class="sidebar-inner">
             <!-- カレンダー -->
-            <div>
-                <div class="section-label section-toggle" id="cal-toggle" onclick="toggleCalendar()">
-                    <span>📅 カレンダー</span>
+            <div class="sidebar-section">
+                <div class="section-toggle" id="cal-toggle" onclick="toggleCalendar()">
+                    <span class="section-label" style="margin-bottom:0">📅 カレンダー</span>
                     <span class="toggle-icon">▼</span>
                 </div>
                 <div class="collapsible" id="cal-collapsible">
-                    <div class="calendar-header">
-                        <button class="cal-nav-btn" onclick="moveMonth(-1)">◀</button>
-                        <input type="date" class="calendar-jump-input" id="calendar-jump" onchange="jumpToDate(this.value)">
-                        <button class="cal-nav-btn" onclick="moveMonth(1)">▶</button>
+                    <div style="margin-top:8px">
+                        <div class="calendar-header">
+                            <button class="cal-nav-btn" onclick="moveMonth(-1)">◀</button>
+                            <input type="date" class="calendar-jump-input" id="calendar-jump" onchange="jumpToDate(this.value)">
+                            <button class="cal-nav-btn" onclick="moveMonth(1)">▶</button>
+                        </div>
+                        <div class="calendar-grid" id="cal-header">
+                            <div class="day-header">日</div><div class="day-header">月</div><div class="day-header">火</div>
+                            <div class="day-header">水</div><div class="day-header">木</div><div class="day-header">金</div>
+                            <div class="day-header">土</div>
+                        </div>
+                        <div class="calendar-grid" id="calendar-days"></div>
                     </div>
-                    <div class="calendar-grid" id="cal-header">
-                        <div class="day-header">日</div><div class="day-header">月</div><div class="day-header">火</div>
-                        <div class="day-header">水</div><div class="day-header">木</div><div class="day-header">金</div>
-                        <div class="day-header">土</div>
-                    </div>
-                    <div class="calendar-grid" id="calendar-days"></div>
                 </div>
             </div>
 
-            <!-- 履歴 -->
+            <!-- 検索 -->
+            <div class="search-wrapper">
+                <input type="text" class="search-input" id="search-input"
+                    placeholder="🔍 検索" oninput="handleSearch(this.value)">
+                <button class="search-clear-btn" id="search-clear-btn" onclick="clearSearch()">✕</button>
+            </div>
+            <div class="search-match-count" id="search-match-count"></div>
+
+            <!-- ファイル一覧（月ごとグループ） -->
             <div class="history-container">
-                <div class="section-label">🗂️ メモ履歴</div>
-                <div class="search-wrapper">
-                    <input type="text" class="search-input" id="search-input"
-                        placeholder="🔍 検索（ファイル名・本文）" oninput="handleSearch(this.value)">
-                    <button class="search-clear-btn" id="search-clear-btn" onclick="clearSearch()">✕</button>
-                </div>
-                <div class="search-match-count" id="search-match-count"></div>
-                <ul class="history-list" id="history-list"></ul>
+                <div id="history-list"></div>
             </div>
         </div>
     </aside>
@@ -649,7 +678,6 @@ let driveIndex        = {};        // { "2025-01-01_120000_preview.txt": { id, n
 
 // ── DOM refs ──
 const memoInput       = document.getElementById('memo-input');
-const historyList     = document.getElementById('history-list');
 const appContainer    = document.getElementById('app-container');
 const fullscreenBtn   = document.getElementById('fullscreen-btn');
 const calendarDays    = document.getElementById('calendar-days');
@@ -942,6 +970,8 @@ function moveMonth(dir) {
     if (currentCalM > 11) { currentCalM = 0; currentCalY++; }
     if (currentCalM < 0)  { currentCalM = 11; currentCalY--; }
     selectedDate = new Date(currentCalY, currentCalM, 1);
+    const mk = `${currentCalY}${String(currentCalM+1).padStart(2,'0')}`;
+    expandedMonths.add(mk);
     syncJumpInput(); renderCalendar(); autoSelectFirstFileForDate();
 }
 
@@ -995,89 +1025,155 @@ async function autoSelectFirstFileForDate() {
 }
 
 // ============================================================
-// 履歴表示
+// 履歴表示（月グループ）
 // ============================================================
+
+// 展開済み月セット（カレント月はデフォルト展開）
+const expandedMonths = new Set();
+
 function renderHistory() {
-    historyList.innerHTML = '';
-    const query  = currentSearchQuery.toLowerCase();
-    const keys   = Object.keys(driveIndex).sort().reverse();
-    let matchCount = 0;
+    const container = document.getElementById('history-list');
+    container.innerHTML = '';
+    const query = currentSearchQuery.toLowerCase();
+    const keys  = Object.keys(driveIndex).sort().reverse();
+
+    // 現在表示中の年月キー
+    const currentMonthKey = `${currentCalY}${String(currentCalM+1).padStart(2,'0')}`;
+    if (!expandedMonths.has('_init')) {
+        expandedMonths.add(currentMonthKey);
+        expandedMonths.add('_init');
+    }
+
+    // 月ごとにグループ化
+    const groups = {}; // { "202605": [key, ...] }
+    let totalMatch = 0;
 
     keys.forEach(key => {
-        if (query) {
-            if (!key.toLowerCase().includes(query)) return;
-        }
-        matchCount++;
-        const li = document.createElement('li');
-        li.className = 'history-item' + (key === activeFileName ? ' active-item' : '');
+        if (query && !key.toLowerCase().includes(query)) return;
+        totalMatch++;
+        const monthKey = key.substring(0, 6); // YYYYMM
+        if (!groups[monthKey]) groups[monthKey] = [];
+        groups[monthKey].push(key);
+    });
 
-        const textWrap = document.createElement('div');
-        textWrap.style.flex = '1';
-        textWrap.style.overflow = 'hidden';
+    const monthKeys = Object.keys(groups).sort().reverse();
 
-        const nameSpan = document.createElement('div');
-        nameSpan.className = 'history-text';
-        nameSpan.innerHTML = '📄 ' + (query ? highlightText(key, currentSearchQuery) : key);
-        textWrap.appendChild(nameSpan);
+    if (monthKeys.length === 0) {
+        container.innerHTML = '<div style="color:var(--text-muted);font-size:0.8rem;padding:8px 4px;">ファイルがありません</div>';
+    }
 
-        li.onclick = async () => {
-            if (!confirmDiscard()) return;
-            const info = driveIndex[key];
-            const datePart = key.substring(0, 8);
-            if (/^\d{8}$/.test(datePart)) {
-                const y = parseInt(datePart.substring(0,4));
-                const m = parseInt(datePart.substring(4,6)) - 1;
-                const d = parseInt(datePart.substring(6,8));
-                selectedDate = new Date(y, m, d);
-                syncJumpInput(); renderCalendar();
+    monthKeys.forEach(monthKey => {
+        const y = monthKey.substring(0, 4);
+        const m = monthKey.substring(4, 6);
+        const label = `${y}年${parseInt(m)}月`;
+        const isCurrentMonth = monthKey === currentMonthKey;
+        const isExpanded = expandedMonths.has(monthKey) || isCurrentMonth;
+
+        const group = document.createElement('div');
+        group.className = 'month-group';
+
+        // 月ヘッダー
+        const header = document.createElement('div');
+        header.className = 'month-group-header' +
+            (isCurrentMonth ? ' current-month' : '') +
+            (isExpanded ? '' : ' collapsed');
+        header.innerHTML = `<span>📁 ${label} (${groups[monthKey].length}件)</span><span class="mg-icon">▼</span>`;
+        header.onclick = () => {
+            if (expandedMonths.has(monthKey)) {
+                expandedMonths.delete(monthKey);
+                header.classList.add('collapsed');
+                body.classList.add('collapsed');
+            } else {
+                expandedMonths.add(monthKey);
+                header.classList.remove('collapsed');
+                body.classList.remove('collapsed');
             }
-            showSyncStatus('syncing', '読み込み中…');
-            try {
-                const text = await driveGetContent(info.id);
-                memoInput.value = text;
-                activeFileName  = key;
-                activeFileId    = info.id;
-                resetUndoRedo(text);
-                savedText = text;
-                fileBadge.textContent = `📁 ${key}`;
-                showSyncStatus('synced', '同期済み');
-            } catch(e) {
-                showSyncStatus('error', '読み込み失敗');
-            }
-            renderHistory();
         };
 
-        const delBtn = document.createElement('button');
-        delBtn.className = 'delete-btn';
-        delBtn.textContent = '🗑';
-        delBtn.onclick = async (e) => {
-            e.stopPropagation();
-            if (!confirm(`${key} を削除しますか？`)) return;
-            showSyncStatus('syncing', '削除中…');
-            try {
-                await driveDelete(driveIndex[key].id);
-                delete driveIndex[key];
-                if (activeFileName === key) {
-                    activeFileName = ''; activeFileId = '';
-                    memoInput.value = '';
-                    resetUndoRedo('');
-                    fileBadge.textContent = '📁 (新規メモ)';
+        // 月ボディ
+        const body = document.createElement('div');
+        body.className = 'month-group-body' + (isExpanded ? '' : ' collapsed');
+
+        const ul = document.createElement('ul');
+        ul.className = 'history-list';
+
+        groups[monthKey].forEach(key => {
+            const li = document.createElement('li');
+            li.className = 'history-item' + (key === activeFileName ? ' active-item' : '');
+
+            const textWrap = document.createElement('div');
+            textWrap.style.cssText = 'flex:1;overflow:hidden';
+
+            const nameSpan = document.createElement('div');
+            nameSpan.className = 'history-text';
+            nameSpan.innerHTML = '📄 ' + (query ? highlightText(key, currentSearchQuery) : key);
+            textWrap.appendChild(nameSpan);
+
+            li.onclick = async () => {
+                if (!confirmDiscard()) return;
+                const info = driveIndex[key];
+                const datePart = key.substring(0, 8);
+                if (/^\d{8}$/.test(datePart)) {
+                    const yr = parseInt(datePart.substring(0,4));
+                    const mo = parseInt(datePart.substring(4,6)) - 1;
+                    const dy = parseInt(datePart.substring(6,8));
+                    selectedDate = new Date(yr, mo, dy);
+                    syncJumpInput(); renderCalendar();
                 }
-                renderHistory(); renderCalendar();
-                showSyncStatus('synced', '同期済み');
-            } catch(e) {
-                showSyncStatus('error', '削除失敗');
-            }
-        };
+                showSyncStatus('syncing', '読み込み中…');
+                try {
+                    const text = await driveGetContent(info.id);
+                    memoInput.value = text;
+                    activeFileName  = key;
+                    activeFileId    = info.id;
+                    resetUndoRedo(text);
+                    savedText = text;
+                    fileBadge.textContent = `📁 ${key}`;
+                    showSyncStatus('synced', '同期済み');
+                } catch(e) {
+                    showSyncStatus('error', '読み込み失敗');
+                }
+                renderHistory();
+            };
 
-        li.appendChild(textWrap);
-        li.appendChild(delBtn);
-        historyList.appendChild(li);
+            const delBtn = document.createElement('button');
+            delBtn.className = 'delete-btn';
+            delBtn.textContent = '🗑';
+            delBtn.onclick = async (e) => {
+                e.stopPropagation();
+                if (!confirm(`${key} を削除しますか？`)) return;
+                showSyncStatus('syncing', '削除中…');
+                try {
+                    await driveDelete(driveIndex[key].id);
+                    delete driveIndex[key];
+                    if (activeFileName === key) {
+                        activeFileName = ''; activeFileId = '';
+                        memoInput.value = '';
+                        resetUndoRedo('');
+                        savedText = '';
+                        fileBadge.textContent = '📁 (新規メモ)';
+                    }
+                    renderHistory(); renderCalendar();
+                    showSyncStatus('synced', '同期済み');
+                } catch(e) {
+                    showSyncStatus('error', '削除失敗');
+                }
+            };
+
+            li.appendChild(textWrap);
+            li.appendChild(delBtn);
+            ul.appendChild(li);
+        });
+
+        body.appendChild(ul);
+        group.appendChild(header);
+        group.appendChild(body);
+        container.appendChild(group);
     });
 
     if (query) {
         const total = Object.keys(driveIndex).length;
-        searchMatchCount.textContent = `${matchCount} / ${total} 件がヒット`;
+        searchMatchCount.textContent = `${totalMatch} / ${total} 件がヒット`;
     } else {
         searchMatchCount.textContent = '';
     }
