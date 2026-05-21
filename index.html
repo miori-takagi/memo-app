@@ -337,25 +337,24 @@
             display: flex;
             align-items: center;
             justify-content: space-between;
-            padding: 8px 12px;
-            background: var(--accent);
-            border: none;
+            padding: 6px 10px;
+            background: var(--surface2);
+            border: 1px solid var(--border);
+            border-left: 3px solid var(--accent);
             border-radius: var(--radius);
             cursor: pointer;
-            font-size: 0.85rem;
+            font-size: 0.8rem;
             font-weight: 700;
-            color: white;
+            color: var(--text);
             user-select: none;
-            letter-spacing: 0.04em;
-            box-shadow: 0 2px 6px rgba(74,123,224,0.25);
-            transition: background 0.15s, box-shadow 0.15s;
+            transition: background 0.15s, border-color 0.15s;
         }
-        .year-group-header:hover { background: var(--accent-hover); box-shadow: 0 3px 10px rgba(74,123,224,0.35); }
-        .year-group-header.current-year { background: var(--accent); outline: 2px solid var(--accent-hover); }
-        .year-group-header .mg-icon { font-size: 0.75rem; transition: transform 0.2s; opacity: 0.85; }
+        .year-group-header:hover { background: var(--accent-soft); border-left-color: var(--accent-hover); }
+        .year-group-header.current-year { color: var(--accent); }
+        .year-group-header .mg-icon { font-size: 0.7rem; transition: transform 0.2s; color: var(--text-muted); }
         .year-group-header.collapsed .mg-icon { transform: rotate(-90deg); }
 
-        .year-group-body { overflow: hidden; transition: max-height 0.25s ease; max-height: 5000px; padding-left: 10px; margin-top: 5px; border-left: 2px solid var(--accent); }
+        .year-group-body { overflow: hidden; transition: max-height 0.25s ease; max-height: 5000px; padding-left: 10px; margin-top: 5px; border-left: 2px solid var(--border); }
         .year-group-body.collapsed { max-height: 0; }
 
         /* 月グループ */
@@ -378,7 +377,7 @@
             transition: background 0.15s, border-color 0.15s;
         }
         .month-group-header:hover { background: var(--accent-soft); border-left-color: var(--accent-hover); }
-        .month-group-header.current-month { background: var(--accent-soft); border-left-color: var(--accent); color: var(--accent); }
+        .month-group-header.current-month { color: var(--accent); }
         .month-group-header .mg-icon { font-size: 0.7rem; transition: transform 0.2s; color: var(--text-muted); }
         .month-group-header.collapsed .mg-icon { transform: rotate(-90deg); }
 
@@ -1173,7 +1172,7 @@ function renderHistory() {
 
                 const nameSpan = document.createElement('div');
                 nameSpan.className = 'history-text';
-                nameSpan.innerHTML = '📄 ' + (query ? highlightText(key, currentSearchQuery) : key);
+                nameSpan.innerHTML = '・' + (query ? highlightText(key, currentSearchQuery) : key);
                 textWrap.appendChild(nameSpan);
 
                 li.onclick = async () => {
