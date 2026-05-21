@@ -574,10 +574,11 @@
             <button class="toolbar-btn" id="undo-btn" onclick="undo()" disabled>↩ 元に戻す</button>
             <button class="toolbar-btn" id="redo-btn" onclick="redo()" disabled>↪ やり直し</button>
             <button class="toolbar-btn primary" onclick="createNewFileMode()">＋ 新規</button>
+            <button class="toolbar-btn primary" id="save-btn" onclick="handleSaveBtn()" disabled>💾 保存</button>
             <button class="toolbar-btn" id="fullscreen-btn" onclick="toggleFullscreen()">⛶ 最大化</button>
         </div>
         <textarea id="memo-input"
-            placeholder="ここにメモを入力してください…（500ms後に自動保存されます）"
+            placeholder="ここにメモを入力してください…"
             oninput="handleInput()"></textarea>
     </main>
 </div>
@@ -935,6 +936,8 @@ async function autoSelectFirstFileForDate() {
             activeFileName  = key;
             activeFileId    = info.id;
             resetUndoRedo(text);
+            textOnFocus = text;
+            saveBtn.disabled = true;
             fileBadge.textContent = `📁 ${key}`;
             showSyncStatus('synced', '同期済み');
         } catch(e) {
@@ -945,6 +948,8 @@ async function autoSelectFirstFileForDate() {
         activeFileName  = '';
         activeFileId    = '';
         resetUndoRedo('');
+        textOnFocus = '';
+        saveBtn.disabled = true;
         fileBadge.textContent = '📁 (新規メモ)';
         showSyncStatus('synced', '同期済み');
     }
@@ -991,6 +996,8 @@ function renderHistory() {
                 activeFileName  = key;
                 activeFileId    = info.id;
                 resetUndoRedo(text);
+                textOnFocus = text;
+                saveBtn.disabled = true;
                 fileBadge.textContent = `📁 ${key}`;
                 showSyncStatus('synced', '同期済み');
             } catch(e) {
@@ -1058,6 +1065,11 @@ function highlightText(text, query) {
 // ============================================================
 // テキストエリア・Undo/Redo
 // ============================================================
+const saveBtn = document.getElementById('save-btn');
+
+// フォーカス取得時のテキスト（変更検知用）
+let textOnFocus = '';
+
 function handleInput() {
     if (!isHistoryAction) {
         const t = memoInput.value;
@@ -1066,24 +1078,53 @@ function handleInput() {
         }
     }
     isHistoryAction = false;
-
-    // 入力中はタイマーをリセットし続け、3秒間入力が止まったら保存
-    clearTimeout(autoSaveTimeout);
-    autoSaveTimeout = setTimeout(saveMemo, 3000);
+    // 変更があれば保存ボタンを有効化
+    saveBtn.disabled = (memoInput.value === textOnFocus);
 }
 
-// フォーカスが外れた時も保存（別アプリに切り替えた時など）
-memoInput.addEventListener('blur', () => {
-    clearTimeout(autoSaveTimeout);
-    saveMemo();
+// フォーカス取得時に現在のテキストを記憶
+memoInput.addEventListener('focus', () => {
+    textOnFocus = memoInput.value;
+    saveBtn.disabled = true;
 });
+
+// フォーカスが外れた時：変更があれば「破棄しますか？」を確認
+memoInput.addEventListener('blur', (e) => {
+    // 保存ボタン押下によるblurは無視
+    if (e.relatedTarget && e.relatedTarget.id === 'save-btn') return;
+
+    if (memoInput.value !== textOnFocus) {
+        // 非同期でconfirmを出す（blurイベント中に同期的に出すとフォーカス制御が狂うため）
+        setTimeout(() => {
+            const ok = confirm('変更は破棄されます。よろしいですか？');
+            if (ok) {
+                // 破棄：フォーカス取得時の内容に戻す
+                memoInput.value = textOnFocus;
+                resetUndoRedo(textOnFocus);
+                saveBtn.disabled = true;
+            } else {
+                // キャンセル：テキストにフォーカスを戻す
+                memoInput.focus();
+            }
+        }, 0);
+    }
+});
+
+// 保存ボタン押下
+function handleSaveBtn() {
+    saveMemo();
+    textOnFocus = memoInput.value;
+    saveBtn.disabled = true;
+    setTimeout(() => memoInput.focus(), 0);
+}
 
 function undo() {
     if (undoStack.length <= 1) return;
     redoStack.push(undoStack.pop());
     isHistoryAction = true;
     memoInput.value = undoStack[undoStack.length-1];
-    updateUndoRedoButtons(); saveMemo();
+    updateUndoRedoButtons();
+    saveBtn.disabled = (memoInput.value === textOnFocus);
 }
 function redo() {
     if (redoStack.length === 0) return;
@@ -1091,7 +1132,8 @@ function redo() {
     undoStack.push(next);
     isHistoryAction = true;
     memoInput.value = next;
-    updateUndoRedoButtons(); saveMemo();
+    updateUndoRedoButtons();
+    saveBtn.disabled = (memoInput.value === textOnFocus);
 }
 function updateUndoRedoButtons() {
     undoBtn.disabled = undoStack.length <= 1;
@@ -1105,9 +1147,10 @@ function createNewFileMode() {
     activeFileName = ''; activeFileId = '';
     memoInput.value = '';
     resetUndoRedo('');
+    textOnFocus = '';
+    saveBtn.disabled = true;
     fileBadge.textContent = '📁 (新規メモ)';
     renderHistory();
-    // ボタンのフォーカスが外れてからtextareaにフォーカスを移す
     setTimeout(() => memoInput.focus(), 0);
 }
 
